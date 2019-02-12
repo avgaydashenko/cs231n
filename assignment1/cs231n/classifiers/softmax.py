@@ -72,7 +72,7 @@ def softmax_loss_vectorized(W, X, y, reg):
   #############################################################################
 
   N = X.shape[0]
-  
+
   probs = np.exp(X.dot(W))
   probs /= probs.sum(axis=1)[:, np.newaxis]
 
