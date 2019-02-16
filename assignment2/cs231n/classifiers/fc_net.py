@@ -192,6 +192,10 @@ class FullyConnectedNet(object):
             self.params['W{}'.format(i+1)] = np.random.normal(scale=weight_scale,
                                                               size=(prev_h, h))
             self.params['b{}'.format(i+1)] = np.zeros((h,))
+            if self.normalization is not None and i < len(hidden_dims):
+                self.params['gamma{}'.format(i+1)] = np.ones((h, ))
+                self.params['beta{}'.format(i+1)] = np.zeros((h,))
+
             prev_h = h
 
         ############################################################################
@@ -258,7 +262,18 @@ class FullyConnectedNet(object):
 
         for i in range(self.num_layers-1):
             W, b = self.params['W{}'.format(i + 1)], self.params['b{}'.format(i + 1)]
-            l, cache = affine_relu_forward(l, W, b)
+            if self.normalization:
+                gamma, beta = self.params['gamma{}'.format(i + 1)], self.params['beta{}'.format(i + 1)]
+
+            l, fc_cache = affine_forward(l, W, b)
+            if self.normalization == 'batchnorm':
+                l, bn_cache = batchnorm_forward(l, gamma, beta, self.bn_params[i])
+            elif self.normalization == 'layernorm':
+                l, bn_cache = layernorm_forward(l, gamma, beta, self.bn_params[i])
+            l, relu_cache = relu_forward(l)
+
+            cache = (fc_cache, bn_cache if self.normalization else None, relu_cache)
+
             caches.append(cache)
 
         if self.num_layers == 1:
@@ -302,7 +317,18 @@ class FullyConnectedNet(object):
         grads['W{}'.format(i)] += self.reg * W
 
         for i in range(self.num_layers-2, -1, -1):
-            dl, grads['W{}'.format(i + 1)], grads['b{}'.format(i + 1)] = affine_relu_backward(dl, caches[i])
+            fc_cache, bn_cache, relu_cache = caches[i]
+
+            dl = relu_backward(dl, relu_cache)
+            if self.normalization == 'batchnorm':
+                dl, dgamma, dbeta = batchnorm_backward(dl, bn_cache)
+            elif self.normalization == 'layernorm':
+                dl, dgamma, dbeta = layernorm_backward(dl, bn_cache)
+            dl, dw, db = affine_backward(dl, fc_cache)
+
+            grads['W{}'.format(i + 1)], grads['b{}'.format(i + 1)] = dw, db
+            if self.normalization:
+                grads['gamma{}'.format(i + 1)], grads['beta{}'.format(i + 1)] = dgamma, dbeta
 
             W = self.params['W{}'.format(i + 1)]
             grads['W{}'.format(i + 1)] += self.reg * W
