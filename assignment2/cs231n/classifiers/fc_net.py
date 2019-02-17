@@ -271,8 +271,10 @@ class FullyConnectedNet(object):
             elif self.normalization == 'layernorm':
                 l, bn_cache = layernorm_forward(l, gamma, beta, self.bn_params[i])
             l, relu_cache = relu_forward(l)
+            if self.use_dropout:
+                l, do_cache = dropout_forward(l, self.dropout_param)
 
-            cache = (fc_cache, bn_cache if self.normalization else None, relu_cache)
+            cache = (fc_cache, bn_cache if self.normalization else None, relu_cache, do_cache if self.use_dropout else None)
 
             caches.append(cache)
 
@@ -317,8 +319,10 @@ class FullyConnectedNet(object):
         grads['W{}'.format(i)] += self.reg * W
 
         for i in range(self.num_layers-2, -1, -1):
-            fc_cache, bn_cache, relu_cache = caches[i]
+            fc_cache, bn_cache, relu_cache, do_cache = caches[i]
 
+            if self.use_dropout:
+                dl = dropout_backward(dl, do_cache)
             dl = relu_backward(dl, relu_cache)
             if self.normalization == 'batchnorm':
                 dl, dgamma, dbeta = batchnorm_backward(dl, bn_cache)
